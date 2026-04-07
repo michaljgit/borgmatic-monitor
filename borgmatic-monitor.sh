@@ -562,7 +562,7 @@ if [[ "${QUIET}" -eq 0 ]]; then
     elif [[ "${CURRENT_STATUS}" == "WARNING" ]]; then
       notify_warning "Backup Warning" "${MSG}"
     else
-      if [[ "${LAST_STATUS}" != "OK" ]] && [[ "${LAST_STATUS}" != "INIT" ]]; then
+      if [[ "${FORCE}" -eq 1 ]] || { [[ "${LAST_STATUS}" != "OK" ]] && [[ "${LAST_STATUS}" != "INIT" ]]; }; then
         notify_ok "Backupy wróciły do normy" "${MSG}"
       fi
     fi
