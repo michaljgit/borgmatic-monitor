@@ -102,20 +102,30 @@ ok "Prefix repo: ${REPO_PREFIX}"
 info "[2/7] Pobieranie danych z DirectAdmin..."
 
 # --- Uzytkownicy ---
-if [[ ! -f "${DA_USERS_LIST}" ]]; then
-  die "Plik users.list nie istnieje: ${DA_USERS_LIST}"
+DA_USERS=()
+
+if [[ -f "${DA_USERS_LIST}" ]]; then
+  while IFS= read -r user; do
+    user=$(echo "${user}" | tr -d '[:space:]')
+    [[ -z "${user}" ]] && continue
+    DA_USERS+=("${user}")
+  done < "${DA_USERS_LIST}"
 fi
 
-# Wczytaj uzytkownikow — kazdy to folder /home/<user>/domains
-DA_USERS=()
-while IFS= read -r user; do
-  user=$(echo "${user}" | tr -d '[:space:]')
-  [[ -z "${user}" ]] && continue
-  DA_USERS+=("${user}")
-done < "${DA_USERS_LIST}"
+# Fallback: skanuj /home szukajac folderow z domains/
+if [[ ${#DA_USERS[@]} -eq 0 ]]; then
+  warn "users.list pusty lub nie istnieje — skanuje /home/*/domains/"
+  for domains_dir in /home/*/domains; do
+    [[ -d "${domains_dir}" ]] || continue
+    user=$(basename "$(dirname "${domains_dir}")")
+    # Pomin systemowych
+    [[ "${user}" == "backup" || "${user}" == "lost+found" ]] && continue
+    DA_USERS+=("${user}")
+  done
+fi
 
 if [[ ${#DA_USERS[@]} -eq 0 ]]; then
-  die "Brak uzytkownikow w ${DA_USERS_LIST}"
+  die "Nie znaleziono uzytkownikow ani w ${DA_USERS_LIST} ani w /home/*/domains/"
 fi
 
 ok "Znaleziono ${#DA_USERS[@]} uzytkownikow DA: ${DA_USERS[*]}"
