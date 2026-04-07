@@ -278,8 +278,10 @@ SOURCE_DIRS="source_directories:"
 SOURCE_DIRS+="\n  - /etc"
 
 for user in "${DA_USERS[@]}"; do
-  if [[ -d "/home/${user}/domains" ]] || true; then
+  if [[ -d "/home/${user}/domains" ]]; then
     SOURCE_DIRS+="\n  - /home/${user}/domains"
+  else
+    warn "Pomijam /home/${user}/domains — katalog nie istnieje"
   fi
 done
 
@@ -349,7 +351,6 @@ mysql_databases:
   - name: all
     username: ${MYSQL_USER}
     password: ${MYSQL_PASS}
-    hostname: ${MYSQL_HOST}
 
 commands:
   - after: error
