@@ -304,8 +304,10 @@ ssh_command: ${SSH_CMD}
 
 keep_hourly: ${KEEP_HOURLY_FILES}
 
-on_error:
-  - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"
+commands:
+  - after: error
+    run:
+      - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"
 
 borg_exit_codes:
   - code: 100
@@ -339,8 +341,10 @@ mysql_databases:
     password: ${MYSQL_PASS}
     hostname: ${MYSQL_HOST}
 
-on_error:
-  - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"
+commands:
+  - after: error
+    run:
+      - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"
 
 borg_exit_codes:
   - code: 100

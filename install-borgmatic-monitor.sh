@@ -52,8 +52,10 @@ if [[ ${#CONFIGS[@]} -eq 0 ]]; then
 fi
 
 ON_ERROR_BLOCK='
-on_error:
-  - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"'
+commands:
+  - after: error
+    run:
+      - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"'
 
 # borg_exit_codes — podnosi warningi o brakujących plikach do errorów
 BORG_EXIT_CODES_BLOCK='
@@ -75,10 +77,10 @@ for config_name in "${CONFIGS[@]}"; do
   # Dodaj on_error jeśli brak
   if ! grep -q "borgmatic-on-error" "${config_file}" 2>/dev/null; then
     echo "${ON_ERROR_BLOCK}" >> "${config_file}"
-    echo "  ADD:  ${config_file} — on_error hook"
+    echo "  ADD:  ${config_file} — commands (on error) hook"
     CHANGED=1
   else
-    echo "  OK:   ${config_file} — on_error już jest"
+    echo "  OK:   ${config_file} — error hook już jest"
   fi
 
   # Dodaj borg_exit_codes jeśli brak
