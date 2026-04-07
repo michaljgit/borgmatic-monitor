@@ -199,6 +199,13 @@ fi
 
 command -v borgmatic &>/dev/null || die "borgmatic nie znaleziony po instalacji!"
 
+# Dodaj ~/.local/bin do PATH na stale jesli brak
+BASHRC="/root/.bashrc"
+if ! grep -q '\.local/bin' "${BASHRC}" 2>/dev/null; then
+  echo 'export PATH="$PATH:/root/.local/bin"' >> "${BASHRC}"
+  ok "Dodano /root/.local/bin do PATH w ${BASHRC}"
+fi
+
 # ============================================================================
 # 4. HASLO BORG + PASSCOMMAND
 # ============================================================================
@@ -415,7 +422,7 @@ info "[7/7] Konfiguracja cron..."
 # Borgmatic cron — co godzine
 BORGMATIC_CRON="0 * * * * /root/.local/bin/borgmatic --verbosity -2 --syslog-verbosity 1 2>&1 | logger -t borgmatic"
 
-if crontab -l 2>/dev/null | grep -q "borgmatic" | grep -v "borgmatic-monitor"; then
+if crontab -l 2>/dev/null | grep -v "borgmatic-monitor" | grep -q "borgmatic"; then
   ok "Cron borgmatic juz skonfigurowany"
 else
   (crontab -l 2>/dev/null; echo ""; echo "# Borgmatic backup (co godzine)"; echo "${BORGMATIC_CRON}") | crontab -
