@@ -204,43 +204,73 @@ check_config() {
     return 2
   fi
 
-  # === Pobierz info o ostatnim archiwum ===
-  local info_json
-  if ! info_json=$(borgmatic info --archive latest --json -c "${config_file}" 2>/dev/null); then
-    log "ERROR: borgmatic info --archive latest failed dla ${config_name}"
-    echo '{"config":"'"${config_name}"'","status":"ERROR","message":"info --archive latest failed","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
+  log "  Sprawdzam ${config_name} (${config_file})..."
+
+  # === Wyciągnij repo path i passcommand z YAML ===
+  local repo_and_pass
+  repo_and_pass=$(python3 -c "
+import yaml, sys
+with open('${config_file}') as f:
+    cfg = yaml.safe_load(f)
+repos = cfg.get('repositories', [])
+repo_path = ''
+for r in repos:
+    if isinstance(r, dict):
+        repo_path = r.get('path', '')
+    elif isinstance(r, str):
+        repo_path = r
+    if repo_path:
+        break
+passcmd = cfg.get('encryption_passcommand', '')
+ssh_cmd = cfg.get('ssh_command', '')
+print(f'{repo_path}|{passcmd}|{ssh_cmd}')
+" 2>/dev/null)
+
+  local repo_path pass_cmd ssh_cmd
+  IFS='|' read -r repo_path pass_cmd ssh_cmd <<< "${repo_and_pass}"
+
+  if [[ -z "${repo_path}" ]]; then
+    log "ERROR: Brak repozytoriów w ${config_name}"
+    echo '{"config":"'"${config_name}"'","status":"ERROR","message":"Brak repozytoriów w YAML","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
     return 2
   fi
 
-  # === Parsuj najnowsze archiwum ===
+  # Przygotuj env dla borg
+  local borg_env=""
+  [[ -n "${pass_cmd}" ]] && borg_env="BORG_PASSCOMMAND='${pass_cmd}'"
+  [[ -n "${ssh_cmd}" ]] && borg_env="${borg_env} BORG_RSH='${ssh_cmd}'"
+
+  # === Ostatnie archiwum (borg list --last 1 --json) ===
+  local borg_list_json
+  if ! borg_list_json=$(eval "${borg_env} borg list --last 1 --json '${repo_path}'" 2>/dev/null); then
+    log "ERROR: borg list failed dla ${config_name} (${repo_path})"
+    echo '{"config":"'"${config_name}"'","status":"ERROR","message":"borg list failed ('"${repo_path}"')","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
+    return 2
+  fi
+
   local latest_info
-  latest_info=$(echo "${info_json}" | python3 -c "
+  latest_info=$(echo "${borg_list_json}" | python3 -c "
 import sys, json
 from datetime import datetime, timezone
 data = json.load(sys.stdin)
-latest_time = None
-latest_name = ''
-for repo in data:
-    for archive in repo.get('archives', []):
-        ts_str = archive.get('start', archive.get('time', ''))
-        if not ts_str:
-            continue
-        try:
-            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
-        except:
-            try:
-                ts = datetime.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
-            except:
-                continue
-        if latest_time is None or ts > latest_time:
-            latest_time = ts
-            latest_name = archive.get('name', archive.get('archive', 'unknown'))
-if latest_time:
-    now = datetime.now(timezone.utc)
-    age = int((now - latest_time).total_seconds())
-    print(f'{latest_name}|{latest_time.strftime(\"%Y-%m-%d %H:%M:%S\")}|{age}')
-else:
+archives = data.get('archives', [])
+if not archives:
     print('unknown|unknown|-1')
+    sys.exit(0)
+a = archives[-1]
+ts_str = a.get('start', a.get('time', ''))
+name = a.get('name', a.get('archive', 'unknown'))
+try:
+    ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+except:
+    try:
+        ts = datetime.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
+    except:
+        print(f'{name}|{ts_str}|-1')
+        sys.exit(0)
+now = datetime.now(timezone.utc)
+age = int((now - ts).total_seconds())
+print(f'{name}|{ts.strftime(\"%Y-%m-%d %H:%M:%S\")}|{age}')
 " 2>/dev/null || echo "unknown|unknown|-1")
 
   local archive_name age_str age_seconds
@@ -260,33 +290,30 @@ else:
     age_human="$((age_seconds / 86400))d $((age_seconds % 86400 / 3600))h"
   fi
 
-  # === Rozmiar repo ===
+  # === Rozmiar repo (borg info --json, szybkie) ===
   local repo_size="N/A"
   local repo_size_bytes=0
-  local repo_info_json
-  if repo_info_json=$(borgmatic repo-info --json -c "${config_file}" 2>/dev/null); then
+  local borg_info_json
+  if borg_info_json=$(eval "${borg_env} borg info --json '${repo_path}'" 2>/dev/null); then
     local size_data
-    size_data=$(echo "${repo_info_json}" | python3 -c "
+    size_data=$(echo "${borg_info_json}" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
-for repo in data:
-    # Borg 1.x
-    cache = repo.get('cache', {})
-    if 'stats' in cache:
-        size = cache['stats'].get('unique_csize', cache['stats'].get('total_csize', 0))
+cache = data.get('cache', data.get('repository', {}))
+stats = cache.get('stats', {})
+size = stats.get('unique_csize', stats.get('total_csize', 0))
+if not size:
+    size = data.get('repository', {}).get('unique_csize', 0)
+if size > 0:
+    if size > 1073741824:
+        human = f'{size/1073741824:.2f} GB'
+    elif size > 1048576:
+        human = f'{size/1048576:.1f} MB'
     else:
-        # Borg 2.x
-        size = repo.get('repository', {}).get('unique_csize', 0)
-    if size > 0:
-        if size > 1073741824:
-            human = f'{size/1073741824:.2f} GB'
-        elif size > 1048576:
-            human = f'{size/1048576:.1f} MB'
-        else:
-            human = f'{size/1024:.1f} KB'
-        print(f'{size}|{human}')
-        sys.exit(0)
-print('0|N/A')
+        human = f'{size/1024:.1f} KB'
+    print(f'{size}|{human}')
+else:
+    print('0|N/A')
 " 2>/dev/null || echo "0|N/A")
 
     IFS='|' read -r repo_size_bytes repo_size <<< "${size_data}"
