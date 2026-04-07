@@ -359,6 +359,14 @@ done
 
 info "[6/7] Inicjalizacja repozytoriow borg na serwerze backupowym..."
 
+# Utworz katalog nadrzedny na serwerze backupowym (borg nie tworzy go sam)
+info "  Tworzenie katalogu zdalnego: ~/${REPO_PREFIX}"
+if ssh ${SSH_CMD#ssh } "${BACKUP_USER}@${BACKUP_HOST}" "mkdir -p ~/${REPO_PREFIX}" 2>&1; then
+  ok "  Katalog zdalny utworzony: ~/${REPO_PREFIX}"
+else
+  warn "  Nie udalo sie utworzyc katalogu zdalnego — moze juz istnieje lub brak dostepu"
+fi
+
 export BORG_PASSPHRASE
 
 init_repo() {
