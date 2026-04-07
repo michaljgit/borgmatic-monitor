@@ -187,26 +187,34 @@ else:
 
 check_config() {
   local config_name="$1"
-  local config_file="${CONFIG_DIR}/${config_name}.yaml"
   local max_age="${THRESHOLDS[${config_name}]:-${DEFAULT_MAX_AGE}}"
 
-  if [[ ! -f "${config_file}" ]]; then
-    log "ERROR: Config ${config_file} nie istnieje"
+  # Szukaj configa w obu katalogach
+  local config_file=""
+  for dir in "${CONFIG_DIR}" /etc/borgmatic.d; do
+    if [[ -f "${dir}/${config_name}.yaml" ]]; then
+      config_file="${dir}/${config_name}.yaml"
+      break
+    fi
+  done
+
+  if [[ -z "${config_file}" ]]; then
+    log "ERROR: Config ${config_name}.yaml nie znaleziony"
     echo '{"config":"'"${config_name}"'","status":"ERROR","message":"Config nie istnieje","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
     return 2
   fi
 
-  # === Pobierz listę archiwów ===
-  local repo_list_json
-  if ! repo_list_json=$(borgmatic repo-list --json -c "${config_file}" 2>/dev/null); then
-    log "ERROR: borgmatic repo-list failed dla ${config_name}"
-    echo '{"config":"'"${config_name}"'","status":"ERROR","message":"repo-list failed","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
+  # === Pobierz info o ostatnim archiwum ===
+  local info_json
+  if ! info_json=$(borgmatic info --archive latest --json -c "${config_file}" 2>/dev/null); then
+    log "ERROR: borgmatic info --archive latest failed dla ${config_name}"
+    echo '{"config":"'"${config_name}"'","status":"ERROR","message":"info --archive latest failed","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
     return 2
   fi
 
   # === Parsuj najnowsze archiwum ===
   local latest_info
-  latest_info=$(echo "${repo_list_json}" | python3 -c "
+  latest_info=$(echo "${info_json}" | python3 -c "
 import sys, json
 from datetime import datetime, timezone
 data = json.load(sys.stdin)
