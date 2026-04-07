@@ -37,21 +37,23 @@ ALERT_LOCK="${STATUS_DIR}/.last_alert_status"
 CONFIG_DIR="/etc/borgmatic"
 
 # Progi wiekowe per config (nazwa pliku bez .yaml => sekundy)
+# Mozna dodac wlasne progi — nieznane configi dostana DEFAULT_MAX_AGE
 declare -A THRESHOLDS=(
-  ["crm-sql"]=7200
-  ["crm"]=7200
-  ["files-admin"]=7200
-  ["files"]=7200
-  ["mysql"]=7200
+  # Przyklad: ["files"]=7200
 )
 
-CONFIGS=(
-  "crm-sql"
-  "crm"
-  "files-admin"
-  "files"
-  "mysql"
-)
+# Automatyczne wykrycie configow borgmatic
+CONFIGS=()
+for _cfg_file in "${CONFIG_DIR}"/*.yaml; do
+  [[ -f "${_cfg_file}" ]] || continue
+  _cfg_name=$(basename "${_cfg_file}" .yaml)
+  CONFIGS+=("${_cfg_name}")
+done
+
+if [[ ${#CONFIGS[@]} -eq 0 ]]; then
+  echo "WARN: Brak configow w ${CONFIG_DIR}/" >&2
+  exit 0
+fi
 
 # ============================================================================
 # FUNKCJE POMOCNICZE

@@ -39,7 +39,17 @@ fi
 echo ""
 echo "[3/5] Aktualizacja configów borgmatic..."
 
-CONFIGS=("crm-sql" "crm" "files-admin" "files" "mysql")
+# Automatyczne wykrycie configow borgmatic
+CONFIGS=()
+for cfg_file in /etc/borgmatic/*.yaml; do
+  [[ -f "${cfg_file}" ]] || continue
+  cfg_name=$(basename "${cfg_file}" .yaml)
+  CONFIGS+=("${cfg_name}")
+done
+
+if [[ ${#CONFIGS[@]} -eq 0 ]]; then
+  echo "  WARN: Brak configow w /etc/borgmatic/ — pomijam krok"
+fi
 
 ON_ERROR_BLOCK='
 on_error:
