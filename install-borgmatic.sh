@@ -476,7 +476,18 @@ echo "4. Sprawdz repozytoria:"
 echo "   borgmatic repo-list -c ${FILES_YAML}"
 echo "   borgmatic repo-list -c ${MYSQL_YAML}"
 echo ""
-echo "5. Zainstaluj monitoring (opcjonalnie):"
+echo "5. Zainstaluj monitoring Telegram:"
 echo "   ./install-borgmatic-monitor.sh"
 echo ""
 echo "==========================================="
+
+# Jesli install-borgmatic-monitor.sh jest obok — zaproponuj uruchomienie
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+if [[ -f "${SCRIPT_DIR}/install-borgmatic-monitor.sh" ]]; then
+  echo ""
+  read -rp "Zainstalowac monitoring Telegram teraz? [Y/n] " INSTALL_MONITOR
+  INSTALL_MONITOR="${INSTALL_MONITOR:-Y}"
+  if [[ "${INSTALL_MONITOR}" =~ ^[Yy]$ ]]; then
+    bash "${SCRIPT_DIR}/install-borgmatic-monitor.sh"
+  fi
+fi

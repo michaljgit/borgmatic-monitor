@@ -25,15 +25,18 @@ echo "[2/5] Tworzenie katalogów i konfiguracji..."
 mkdir -p /var/log/borgmatic-monitor
 echo "  OK: /var/log/borgmatic-monitor"
 
-# Utwórz .env jeśli nie istnieje
+# Utwórz .env z danymi Telegram
 ENV_FILE="/etc/borgmatic-monitor.env"
-if [[ ! -f "${ENV_FILE}" ]]; then
-  cp .env.example "${ENV_FILE}"
-  chmod 600 "${ENV_FILE}"
-  echo "  ADD: ${ENV_FILE} (uzupełnij token i chat_id!)"
-else
-  echo "  OK:  ${ENV_FILE} już istnieje"
-fi
+TG_TOKEN="${BORGMATIC_TG_TOKEN:-8234236760:AAGaaMBv2EPeB1Fa0CHbVImTkPOrN3F_TBE}"
+TG_CHAT="${BORGMATIC_TG_CHAT_ID:--5127666651}"
+
+cat > "${ENV_FILE}" <<ENVEOF
+# /etc/borgmatic-monitor.env
+BORGMATIC_TG_TOKEN="${TG_TOKEN}"
+BORGMATIC_TG_CHAT_ID="${TG_CHAT}"
+ENVEOF
+chmod 600 "${ENV_FILE}"
+echo "  OK: ${ENV_FILE} (token + chat_id skonfigurowane)"
 
 # 3. Dodaj on_error hook + borg_exit_codes do configów borgmatic
 echo ""
