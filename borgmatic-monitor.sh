@@ -220,17 +220,14 @@ for repo in data:
         if not ts_str:
             continue
         try:
-            ts = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+            ts = datetime.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S')
         except:
-            try:
-                ts = datetime.strptime(ts_str[:19], '%Y-%m-%dT%H:%M:%S').replace(tzinfo=timezone.utc)
-            except:
-                continue
+            continue
         if latest_time is None or ts > latest_time:
             latest_time = ts
             latest_name = archive.get('name', archive.get('archive', 'unknown'))
 if latest_time:
-    now = datetime.now(timezone.utc)
+    now = datetime.now()
     age = int((now - latest_time).total_seconds())
     print(f'{latest_name}|{latest_time.strftime(\"%Y-%m-%d %H:%M:%S\")}|{age}')
 else:
