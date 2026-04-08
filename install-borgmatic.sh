@@ -441,10 +441,10 @@ fi
 
 info "[7/7] Konfiguracja cron..."
 
-# Borgmatic cron — codziennie o 7:00 i 17:00
+# Borgmatic cron — codziennie o 7:00 i 9:00
 BORGMATIC_BIN="/root/.local/bin/borgmatic"
-CRON_MYSQL="0 7,17 * * * ${BORGMATIC_BIN} create --verbosity -2 --syslog-verbosity 1 -c /etc/borgmatic/mysql.yaml 2>&1 | logger -t borgmatic-mysql"
-CRON_FILES="15 7,17 * * * ${BORGMATIC_BIN} create --verbosity -2 --syslog-verbosity 1 -c /etc/borgmatic/files.yaml 2>&1 | logger -t borgmatic-files"
+CRON_MYSQL="0 7,9 * * * ${BORGMATIC_BIN} create --verbosity -2 --syslog-verbosity 1 -c /etc/borgmatic/mysql.yaml 2>&1 | logger -t borgmatic-mysql"
+CRON_FILES="15 7,9 * * * ${BORGMATIC_BIN} create --verbosity -2 --syslog-verbosity 1 -c /etc/borgmatic/files.yaml 2>&1 | logger -t borgmatic-files"
 
 if crontab -l 2>/dev/null | grep -v "borgmatic-monitor" | grep -q "borgmatic"; then
   ok "Cron borgmatic juz skonfigurowany"
