@@ -17,6 +17,9 @@
 
 set -uo pipefail
 
+# Upewnij sie ze borgmatic jest w PATH (gdy uruchamiany z crona)
+export PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
+
 # ============================================================================
 # KONFIGURACJA
 # ============================================================================
