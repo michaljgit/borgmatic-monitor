@@ -209,6 +209,13 @@ fi
 
 command -v borgmatic &>/dev/null || die "borgmatic nie znaleziony po instalacji!"
 
+# Symlink do /usr/local/bin/ zeby borgmatic byl dostepny wszedzie
+BORGMATIC_PATH=$(command -v borgmatic)
+if [[ -n "${BORGMATIC_PATH}" ]] && [[ ! -e /usr/local/bin/borgmatic ]]; then
+  ln -sf "${BORGMATIC_PATH}" /usr/local/bin/borgmatic
+  ok "Symlink: /usr/local/bin/borgmatic -> ${BORGMATIC_PATH}"
+fi
+
 # Dodaj ~/.local/bin do PATH na stale jesli brak
 BASHRC="/root/.bashrc"
 if ! grep -q '\.local/bin' "${BASHRC}" 2>/dev/null; then
