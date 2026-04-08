@@ -187,13 +187,107 @@ else:
 }
 
 # ============================================================================
+# DYNAMICZNY LIMIT WIEKU — parsuje crontab dla configa
+# ============================================================================
+
+# Zwraca max_age w sekundach dla configa na podstawie crontab
+# (najwiekszy odstep miedzy scheduled runs + 4h margines)
+get_max_age_for_config() {
+  local config_name="$1"
+  local calculated_age
+
+  calculated_age=$(crontab -l 2>/dev/null | python3 -c "
+import sys, re
+
+config_name = '${config_name}'
+default_age = ${DEFAULT_MAX_AGE}
+
+def parse_field(spec, lo, hi):
+    result = set()
+    for part in spec.split(','):
+        if part == '*':
+            result.update(range(lo, hi+1))
+        elif '/' in part:
+            base, step = part.split('/')
+            start = lo if base == '*' else int(base)
+            for v in range(start, hi+1, int(step)):
+                result.add(v)
+        elif '-' in part:
+            a, b = part.split('-')
+            result.update(range(int(a), int(b)+1))
+        else:
+            try:
+                result.add(int(part))
+            except:
+                pass
+    return sorted(result)
+
+for line in sys.stdin.read().split('\n'):
+    line = line.strip()
+    if not line or line.startswith('#'):
+        continue
+    if '/{}.yaml'.format(config_name) not in line:
+        continue
+    if 'borgmatic' not in line or 'borgmatic-monitor' in line:
+        continue
+    parts = line.split()
+    if len(parts) < 5:
+        continue
+    try:
+        minutes = parse_field(parts[0], 0, 59)
+        hours = parse_field(parts[1], 0, 23)
+    except:
+        continue
+    runs = sorted({h*60 + m for h in hours for m in minutes})
+    if not runs:
+        continue
+    gaps = []
+    for i, r in enumerate(runs):
+        nxt = runs[(i+1) % len(runs)]
+        gap = (nxt - r) if nxt > r else (24*60 - r + nxt)
+        gaps.append(gap)
+    max_gap_min = max(gaps)
+    # Margines 4h na czas trwania backupu
+    print((max_gap_min + 4*60) * 60)
+    sys.exit(0)
+
+print(default_age)
+" 2>/dev/null)
+
+  if [[ -n "${calculated_age}" ]] && [[ "${calculated_age}" =~ ^[0-9]+$ ]] && [[ "${calculated_age}" -gt 0 ]]; then
+    echo "${calculated_age}"
+  else
+    echo "${DEFAULT_MAX_AGE}"
+  fi
+}
+
+# Formatuje liczbe sekund na "Xh" lub "Xd Yh"
+format_age_limit() {
+  local s="$1"
+  if [[ "${s}" -lt 3600 ]]; then
+    echo "$((s / 60))m"
+  elif [[ "${s}" -lt 86400 ]]; then
+    echo "$((s / 3600))h"
+  else
+    echo "$((s / 86400))d $((s % 86400 / 3600))h"
+  fi
+}
+
+# ============================================================================
 # CHECK POJEDYNCZEGO CONFIGA
 # ============================================================================
 
 check_config() {
   local config_name="$1"
   local config_file="${CONFIG_DIR}/${config_name}.yaml"
-  local max_age="${THRESHOLDS[${config_name}]:-${DEFAULT_MAX_AGE}}"
+  local max_age
+
+  # Manualny override z THRESHOLDS, inaczej dynamicznie z crona
+  if [[ -n "${THRESHOLDS[${config_name}]:-}" ]]; then
+    max_age="${THRESHOLDS[${config_name}]}"
+  else
+    max_age=$(get_max_age_for_config "${config_name}")
+  fi
 
   if [[ ! -f "${config_file}" ]]; then
     log "ERROR: Config ${config_file} nie istnieje"
@@ -202,12 +296,25 @@ check_config() {
   fi
 
   # === Pobierz listę archiwów ===
-  local repo_list_json
-  if ! repo_list_json=$(borgmatic repo-list --json -c "${config_file}" 2>/dev/null); then
+  local repo_list_json repo_list_err
+  repo_list_err=$(mktemp)
+  if ! repo_list_json=$(borgmatic repo-list --json -c "${config_file}" 2>"${repo_list_err}"); then
+    local err_content
+    err_content=$(cat "${repo_list_err}" 2>/dev/null || echo "")
+    rm -f "${repo_list_err}"
+
+    # Lock = backup w toku → nie alarmuj, tylko raportuj
+    if echo "${err_content}" | grep -qiE "lock\.exclusive|Failed to (create|acquire) the lock"; then
+      log "INFO: ${config_name} — backup w toku (lock) — skip"
+      echo '{"config":"'"${config_name}"'","status":"OK","message":"Backup w toku (lock)","last_archive":"w toku","last_archive_time":"w toku","age_seconds":0,"age_human":"w toku","repo_size":"N/A","repo_size_bytes":0,"size_status":"OK","size_message":"Backup aktualnie w toku"}'
+      return 0
+    fi
+
     log "ERROR: borgmatic repo-list failed dla ${config_name}"
     echo '{"config":"'"${config_name}"'","status":"ERROR","message":"repo-list failed","last_archive":"N/A","age_seconds":-1,"age_human":"N/A","repo_size":"N/A","repo_size_bytes":0,"size_status":"N/A","size_message":"N/A"}'
     return 2
   fi
+  rm -f "${repo_list_err}"
 
   # === Parsuj najnowsze archiwum ===
   local latest_info
@@ -296,17 +403,20 @@ print('0|N/A')
   local message="OK"
   local retcode=0
 
+  local max_age_human
+  max_age_human=$(format_age_limit "${max_age}")
+
   if [[ "${age_seconds}" -lt 0 ]]; then
     status="ERROR"
     message="Nie można odczytać wieku archiwum"
     retcode=2
   elif [[ "${age_seconds}" -gt $((max_age * 3)) ]]; then
     status="ERROR"
-    message="Archiwum KRYTYCZNIE stare: ${age_human} (limit: $((max_age/3600))h)"
+    message="Archiwum KRYTYCZNIE stare: ${age_human} (limit: ${max_age_human})"
     retcode=2
   elif [[ "${age_seconds}" -gt "${max_age}" ]]; then
     status="WARNING"
-    message="Archiwum za stare: ${age_human} (limit: $((max_age/3600))h)"
+    message="Archiwum za stare: ${age_human} (limit: ${max_age_human})"
     retcode=1
   fi
 
