@@ -24,7 +24,7 @@ export PATH="/root/.local/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
 # KONFIGURACJA
 # ============================================================================
 
-DEFAULT_MAX_AGE=7200  # 2h w sekundach
+DEFAULT_MAX_AGE=57600  # 16h w sekundach (monitor leci 2x dziennie o 8:00 i 18:00 — max luka 14h + 2h margines)
 
 # Próg zmiany rozmiaru repo (procentowo) — alarmuj jeśli zmiana > X%
 SIZE_CHANGE_WARNING_PCT=20   # 20% = warning
@@ -186,81 +186,6 @@ else:
   fi
 }
 
-# ============================================================================
-# DYNAMICZNY LIMIT WIEKU — parsuje crontab dla configa
-# ============================================================================
-
-# Zwraca max_age w sekundach dla configa na podstawie crontab
-# (najwiekszy odstep miedzy scheduled runs + 4h margines)
-get_max_age_for_config() {
-  local config_name="$1"
-  local calculated_age
-
-  calculated_age=$(crontab -l 2>/dev/null | python3 -c "
-import sys, re
-
-config_name = '${config_name}'
-default_age = ${DEFAULT_MAX_AGE}
-
-def parse_field(spec, lo, hi):
-    result = set()
-    for part in spec.split(','):
-        if part == '*':
-            result.update(range(lo, hi+1))
-        elif '/' in part:
-            base, step = part.split('/')
-            start = lo if base == '*' else int(base)
-            for v in range(start, hi+1, int(step)):
-                result.add(v)
-        elif '-' in part:
-            a, b = part.split('-')
-            result.update(range(int(a), int(b)+1))
-        else:
-            try:
-                result.add(int(part))
-            except:
-                pass
-    return sorted(result)
-
-for line in sys.stdin.read().split('\n'):
-    line = line.strip()
-    if not line or line.startswith('#'):
-        continue
-    if '/{}.yaml'.format(config_name) not in line:
-        continue
-    if 'borgmatic' not in line or 'borgmatic-monitor' in line:
-        continue
-    parts = line.split()
-    if len(parts) < 5:
-        continue
-    try:
-        minutes = parse_field(parts[0], 0, 59)
-        hours = parse_field(parts[1], 0, 23)
-    except:
-        continue
-    runs = sorted({h*60 + m for h in hours for m in minutes})
-    if not runs:
-        continue
-    gaps = []
-    for i, r in enumerate(runs):
-        nxt = runs[(i+1) % len(runs)]
-        gap = (nxt - r) if nxt > r else (24*60 - r + nxt)
-        gaps.append(gap)
-    max_gap_min = max(gaps)
-    # Margines 4h na czas trwania backupu
-    print((max_gap_min + 4*60) * 60)
-    sys.exit(0)
-
-print(default_age)
-" 2>/dev/null)
-
-  if [[ -n "${calculated_age}" ]] && [[ "${calculated_age}" =~ ^[0-9]+$ ]] && [[ "${calculated_age}" -gt 0 ]]; then
-    echo "${calculated_age}"
-  else
-    echo "${DEFAULT_MAX_AGE}"
-  fi
-}
-
 # Formatuje liczbe sekund na "Xh" lub "Xd Yh"
 format_age_limit() {
   local s="$1"
@@ -282,12 +207,8 @@ check_config() {
   local config_file="${CONFIG_DIR}/${config_name}.yaml"
   local max_age
 
-  # Manualny override z THRESHOLDS, inaczej dynamicznie z crona
-  if [[ -n "${THRESHOLDS[${config_name}]:-}" ]]; then
-    max_age="${THRESHOLDS[${config_name}]}"
-  else
-    max_age=$(get_max_age_for_config "${config_name}")
-  fi
+  # Manualny override z THRESHOLDS, inaczej DEFAULT_MAX_AGE
+  max_age="${THRESHOLDS[${config_name}]:-${DEFAULT_MAX_AGE}}"
 
   if [[ ! -f "${config_file}" ]]; then
     log "ERROR: Config ${config_file} nie istnieje"

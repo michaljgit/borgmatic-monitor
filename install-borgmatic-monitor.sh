@@ -108,12 +108,12 @@ done
 # 4. Cron
 echo ""
 echo "[4/5] Konfiguracja cron..."
-CRON_LINE="*/30 * * * * /usr/local/bin/borgmatic-monitor.sh 2>&1 | logger -t borgmatic-monitor"
+CRON_LINE="0 8,18 * * * /usr/local/bin/borgmatic-monitor.sh 2>&1 | logger -t borgmatic-monitor"
 if crontab -l 2>/dev/null | grep -q "borgmatic-monitor.sh"; then
   echo "  OK:   Cron już skonfigurowany"
 else
-  (crontab -l 2>/dev/null; echo ""; echo "# Borgmatic backup monitoring (co 30 min)"; echo "${CRON_LINE}") | crontab -
-  echo "  ADD:  Cron co 30 min"
+  (crontab -l 2>/dev/null; echo ""; echo "# Borgmatic backup monitoring (2x dziennie: 8:00 i 18:00)"; echo "${CRON_LINE}") | crontab -
+  echo "  ADD:  Cron 2x dziennie (8:00, 18:00)"
 fi
 
 # 5. Podsumowanie
