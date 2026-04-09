@@ -508,9 +508,12 @@ icons = {'OK': '✅', 'WARNING': '⚠️', 'ERROR': '🔴'}
 lines = []
 for r in results:
     icon = icons.get(r['status'], '❓')
+    last_time = r.get('last_archive_time', 'N/A')
     line = f"{icon} <b>{r['config']}</b> — {r['age_human']}"
     if r['repo_size'] != 'N/A':
         line += f" · {r['repo_size']}"
+    if last_time not in ('N/A', 'unknown', 'w toku'):
+        line += f"\n   ↳ 🕐 {last_time}"
     if r['status'] != 'OK':
         line += f"\n   ↳ {r['message']}"
     if r.get('size_status') not in ('OK', 'N/A') and r.get('size_message'):
