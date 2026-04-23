@@ -330,9 +330,9 @@ commands:
 
 borg_exit_codes:
   - code: 100
-    treat_as: error
+    treat_as: warning
   - code: 105
-    treat_as: error
+    treat_as: warning
 FILESEOF
 
 ok "Wygenerowano: ${FILES_YAML}"
@@ -366,9 +366,9 @@ commands:
 
 borg_exit_codes:
   - code: 100
-    treat_as: error
+    treat_as: warning
   - code: 105
-    treat_as: error
+    treat_as: warning
 MYSQLEOF
 
 ok "Wygenerowano: ${MYSQL_YAML}"

@@ -60,13 +60,13 @@ commands:
     run:
       - "/usr/local/bin/borgmatic-on-error.sh {configuration_filename} {repository} {error}"'
 
-# borg_exit_codes — podnosi warningi o brakujących plikach do errorów
+# borg_exit_codes — brakujace pliki jako warning (nie error)
 BORG_EXIT_CODES_BLOCK='
 borg_exit_codes:
   - code: 100
-    treat_as: error
+    treat_as: warning
   - code: 105
-    treat_as: error'
+    treat_as: warning'
 
 for config_name in "${CONFIGS[@]}"; do
   config_file="/etc/borgmatic/${config_name}.yaml"
