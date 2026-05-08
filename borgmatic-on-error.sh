@@ -22,6 +22,11 @@ CONFIG_FILE="${1:-unknown}"
 REPOSITORY="${2:-unknown}"
 ERROR_MSG="${3:-Nieznany błąd}"
 
+# Ignoruj bledy z lockiem (backup w toku — nie alarmuj)
+if echo "${ERROR_MSG}" | grep -qiE "lock\.exclusive|Failed to (create|acquire) the lock"; then
+  exit 0
+fi
+
 CONFIG_NAME=$(basename "${CONFIG_FILE}" .yaml)
 
 # Ogranicz error message do 800 znaków (Telegram limit + czytelność)
