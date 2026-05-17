@@ -23,7 +23,11 @@ REPOSITORY="${2:-unknown}"
 ERROR_MSG="${3:-Nieznany błąd}"
 
 # Ignoruj bledy z lockiem (backup w toku — nie alarmuj)
+# Borg exit 2 z list/info podczas create = prawie zawsze lock
 if echo "${ERROR_MSG}" | grep -qiE "lock\.exclusive|Failed to (create|acquire) the lock"; then
+  exit 0
+fi
+if echo "${ERROR_MSG}" | grep -qE "borg (list|info).*returned non-zero exit status 2"; then
   exit 0
 fi
 
