@@ -27,7 +27,7 @@ ERROR_MSG="${3:-Nieznany błąd}"
 if echo "${ERROR_MSG}" | grep -qiE "lock\.exclusive|Failed to (create|acquire) the lock"; then
   exit 0
 fi
-if echo "${ERROR_MSG}" | grep -qE "borg (list|info).*returned non-zero exit status 2"; then
+if echo "${ERROR_MSG}" | grep -qE "borg (list|info|create|prune|compact|check).*returned non-zero exit status 2"; then
   exit 0
 fi
 
